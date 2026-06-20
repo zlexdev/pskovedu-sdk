@@ -14,8 +14,21 @@ Import example::
 from __future__ import annotations
 
 from ._base import Watcher
+from .bell import LessonBell
 from .diff import Delta, StateDiffer
 from .dispatcher import Dispatcher
+from .events import (
+    Bell,
+    LessonEnded,
+    LessonStarting,
+    MarkChanged,
+    NewHomework,
+    NewMark,
+    NewNotification,
+    NewReception,
+    ReactiveEvent,
+    ScheduleChanged,
+)
 from .watchers import (
     HomeworkWatcher,
     MarkWatcher,
@@ -25,12 +38,23 @@ from .watchers import (
 )
 
 __all__ = [
+    "Bell",
     "Delta",
     "Dispatcher",
     "HomeworkWatcher",
+    "LessonBell",
+    "LessonEnded",
+    "LessonStarting",
+    "MarkChanged",
     "MarkWatcher",
+    "NewHomework",
+    "NewMark",
+    "NewNotification",
+    "NewReception",
     "NotificationWatcher",
+    "ReactiveEvent",
     "ReceptionWatcher",
+    "ScheduleChanged",
     "ScheduleWatcher",
     "StateDiffer",
     "Watcher",

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .constants import DEFAULT_HOSTS, DEFAULT_UA, Host
 
@@ -12,7 +13,7 @@ def default_hosts() -> dict[Host, str]:
     return dict(DEFAULT_HOSTS)
 
 
-class ClientConfig(BaseModel):
+class ClientConfig(BaseSettings):
     """Immutable SDK configuration.
 
     All fields have safe defaults; override only what differs from the standard
@@ -34,7 +35,7 @@ class ClientConfig(BaseModel):
         user_agent: ``User-Agent`` header sent with every HTTP request.
     """
 
-    model_config = ConfigDict(strict=True)
+    model_config = SettingsConfigDict(env_prefix="PSKOVEDU_")
 
     hosts: dict[Host, str] = Field(default_factory=default_hosts)
     jwt_refresh_skew_s: int = 300

@@ -112,7 +112,7 @@ async def show_qr(url: str) -> None:
 
 async def main():
     async with Client() as client:
-        await client.login_qr(show_qr)       # blocks until confirmed
+        await client.login_with_qr(display_cb=show_qr)   # blocks until confirmed
         session = await client.get_session()
         print("Logged in as:", session.display_name)
 
@@ -158,6 +158,9 @@ Protocol dispatch is automatic — REST, Ext.Direct RPC, SSE, and X1 all go thro
 ### Diary
 
 ```python
+from datetime import date
+from pskovedu.methods.diary import DiaryPages
+
 async with Client.from_cookie(x1_sso="...") as client:
     participants = await client.get_participants()
     guid = participants[0].guid
@@ -188,8 +191,8 @@ async with Client.from_cookie(x1_sso="...") as client:
 ### Notifications
 
 ```python
-    notifications = await client.get_notifications()
-    for n in notifications:
+    notifications = await client.get_user_notifications()
+    for n in notifications.items:
         print(n.title, n.created_at)
 ```
 
@@ -269,10 +272,10 @@ watcher = MarkWatcher(client, participant_guid="...", storage=storage)
 `LessonBell` runs entirely locally — no network calls. Give it a `ScheduleDay` and iterate:
 
 ```python
-from pskovedu.reactive import LessonBell
+from pskovedu.reactive import LessonBell, LessonStarting, Bell, LessonEnded
 from datetime import timedelta
 
-schedule_day = await client.get_schedule_day(grade_guid="...")
+schedule_day = await client.get_schedule(grade_guid="...")
 bell = LessonBell(schedule_day, lead=timedelta(minutes=5))
 
 async for event in bell.events():
@@ -294,8 +297,8 @@ from pskovedu.config import ClientConfig
 
 config = ClientConfig(
     request_timeout_s=30.0,
-    poll_interval_s=60.0,
-    backoff_max_s=300.0,
+    retries=2,
+    rate_limit_rps=4.0,
 )
 
 async with Client(config=config) as client:
@@ -306,8 +309,9 @@ All settings accept environment variables with the `PSKOVEDU_` prefix:
 
 ```env
 PSKOVEDU_REQUEST_TIMEOUT_S=30
-PSKOVEDU_POLL_INTERVAL_S=60
-PSKOVEDU_BACKOFF_MAX_S=300
+PSKOVEDU_RETRIES=2
+PSKOVEDU_RATE_LIMIT_RPS=4.0
+PSKOVEDU_ALLOW_MUTATIONS=false
 ```
 
 ---
@@ -343,6 +347,59 @@ pskovedu/
 ├── rate_limit/        # TokenBucket rate limiter
 └── utils/             # JWT decode, URL encoding helpers
 ```
+
+---
+
+## Gotchas
+
+### Cold start emits the entire existing dataset
+A watcher starts with an empty snapshot, so the **first** poll classifies every
+current mark / homework / slot as new and fires one event per item. To suppress
+this flood on startup, pass a `FileStorage` whose snapshot already exists from a
+previous run — subsequent restarts emit only changes since last stop.
+
+### `X1_SSO` expiry is not auto-recovered
+When the session cookie expires mid-run the next call raises `AuthExpiredError`.
+There is no silent re-auth loop. Wrap long-running watchers in your own
+reconnect logic around `AuthExpiredError`.
+
+### `events()` is an async generator — do not `await` it
+`watcher.events()`, `Dispatcher.events()`, and `LessonBell.events()` are async
+generators. Use `async for event in watcher.events():` — never `await` them.
+
+### Dispatcher silently drops a failing watcher, not all watchers
+If one watcher raises a non-`CancelledError` exception it is logged and removed;
+the remaining watchers continue. Breaking out of the `async for` cancels all
+pump tasks cleanly.
+
+### LessonBell — keep your `now` callable tz-consistent
+Portal lesson times are local-naive strings. The default `now` returns a naive
+local datetime to match. If you pass a tz-aware `now`, make sure all other
+datetime comparisons in your code are also tz-aware — mixing raises
+`TypeError: can't subtract offset-naive and offset-aware datetimes`.
+
+### `FileStorage` is single-process only
+Its in-process `asyncio.Lock` is safe across async tasks in one process but does
+**not** lock across OS processes. Two processes pointing at the same JSON file
+will clobber each other.
+
+### `async with Client(...)` is strongly recommended
+Without the context manager the session cookies are not persisted on shutdown and
+the HTTP transport is not closed gracefully. Use `async with` for anything
+long-lived.
+
+### QR login times out after 120 seconds
+`login_with_qr()` raises `AuthError` if no scan is detected within 120 s or
+after 3 consecutive `qr-error` SSE events.
+
+### Paginated methods return `EduPage`, not a list
+`get_user_notifications()`, `get_reception()`, `get_participants()` etc. return
+`EduPage[T]`. Iterate `.items`, or use `async for x in client(SomePages(...))` for
+auto-fetching streams.
+
+### Journal writes are opt-in
+`ClientConfig.allow_mutations` defaults to `False`. Methods like `save_journal`
+raise `MutationsDisabled` until you set `ClientConfig(allow_mutations=True)`.
 
 ---
 

@@ -102,7 +102,7 @@ async def show_qr(url: str) -> None:
     print("Отсканируйте QR в приложении Госуслуги:", url)
 
 async with Client() as client:
-    await client.login_qr(show_qr)
+    await client.login_with_qr(display_cb=show_qr)
     session = await client.get_session()
     print("Вошли как:", session.display_name)
 ```
@@ -114,6 +114,9 @@ async with Client() as client:
 ### Дневник и оценки
 
 ```python
+from datetime import date
+from pskovedu.methods.diary import DiaryPages
+
 async with Client.from_cookie(x1_sso="...") as client:
     participants = await client.get_participants()
     guid = participants[0].guid
@@ -142,8 +145,8 @@ async with Client.from_cookie(x1_sso="...") as client:
 ### Уведомления
 
 ```python
-    notifications = await client.get_notifications()
-    for n in notifications:
+    notifications = await client.get_user_notifications()
+    for n in notifications.items:
         print(n.title, n.created_at)
 ```
 
@@ -211,10 +214,10 @@ watcher = MarkWatcher(client, participant_guid="...", storage=storage)
 ## Звонки уроков
 
 ```python
-from pskovedu.reactive import LessonBell
+from pskovedu.reactive import LessonBell, LessonStarting, Bell, LessonEnded
 from datetime import timedelta
 
-schedule_day = await client.get_schedule_day(grade_guid="...")
+schedule_day = await client.get_schedule(grade_guid="...")
 bell = LessonBell(schedule_day, lead=timedelta(minutes=5))
 
 async for event in bell.events():
@@ -236,8 +239,8 @@ from pskovedu.config import ClientConfig
 
 config = ClientConfig(
     request_timeout_s=30.0,
-    poll_interval_s=60.0,
-    backoff_max_s=300.0,
+    retries=2,
+    rate_limit_rps=4.0,
 )
 ```
 
@@ -245,8 +248,9 @@ config = ClientConfig(
 
 ```env
 PSKOVEDU_REQUEST_TIMEOUT_S=30
-PSKOVEDU_POLL_INTERVAL_S=60
-PSKOVEDU_BACKOFF_MAX_S=300
+PSKOVEDU_RETRIES=2
+PSKOVEDU_RATE_LIMIT_RPS=4.0
+PSKOVEDU_ALLOW_MUTATIONS=false
 ```
 
 ---
@@ -281,6 +285,55 @@ pskovedu/
 ├── breaker/           # CircuitBreaker
 └── rate_limit/        # TokenBucket
 ```
+
+---
+
+## Подводные камни
+
+### Первый запуск вываливает все существующие данные
+Наблюдатель стартует с пустым снимком, поэтому на первом опросе каждая оценка /
+задание / слот классифицируется как новая и порождает событие. Чтобы не получить
+лавину при старте — передайте `FileStorage` с уже существующим снимком от
+прошлого запуска.
+
+### Истечение `X1_SSO` не восстанавливается автоматически
+При протухании куки следующий запрос выбрасывает `AuthExpiredError`. Петли
+автоматической переавторизации нет — оберните долгоживущие наблюдатели в
+собственный reconnect-обработчик.
+
+### `events()` — асинхронный генератор, не awaitable
+`watcher.events()`, `Dispatcher.events()`, `LessonBell.events()` — асинхронные
+генераторы. Используйте `async for event in watcher.events():`, никогда не `await`.
+
+### Dispatcher молча дропает упавший наблюдатель, а не всё
+Если один наблюдатель кидает не-`CancelledError` — он логируется и удаляется,
+остальные продолжают работать. Выход из `async for` корректно отменяет все задачи.
+
+### LessonBell — не смешивайте tz-aware и naive datetime
+Портал возвращает локальные naive-строки. `now` по умолчанию тоже naive. Если
+передаёте tz-aware `now` — следите, чтобы все остальные сравнения дат тоже были
+aware, иначе получите `TypeError`.
+
+### `FileStorage` — только для одного процесса
+`asyncio.Lock` защищает только внутри одного процесса. Два процесса, работающих
+с одним JSON-файлом, перетрут данные друг друга.
+
+### `async with Client(...)` настоятельно рекомендуется
+Без контекст-менеджера куки не сохраняются при остановке и HTTP-транспорт не
+закрывается. Используйте `async with` для долгоживущего кода.
+
+### QR-авторизация истекает через 120 секунд
+`login_with_qr()` кидает `AuthError`, если QR не сканировали 120 с или
+случилось 3 `qr-error` SSE-события подряд.
+
+### Методы с пагинацией возвращают `EduPage`, а не список
+`get_user_notifications()`, `get_reception()`, `get_participants()` и т.д.
+возвращают `EduPage[T]`. Итерируйте `.items`, или используйте
+`async for x in client(SomePages(...))`.
+
+### Запись в журнал отключена по умолчанию
+`ClientConfig.allow_mutations` по умолчанию `False`. Методы вроде `save_journal`
+бросают `MutationsDisabled`, пока не установите `ClientConfig(allow_mutations=True)`.
 
 ---
 
