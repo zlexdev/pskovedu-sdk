@@ -1,143 +1,293 @@
+<div align="center">
+
 # pskovedu-sdk
 
-Асинхронный Python SDK для электронного журнала **one.pskovedu.ru** — портала образования Псковской области.
+**Async Python SDK for the pskovedu.ru electronic journal**
 
-> [English version →](README.en.md)
+Pskov Region Education Portal · one.pskovedu.ru
 
----
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Typed](https://img.shields.io/badge/typed-py.typed-informational)](pskovedu/py.typed)
+[![Vibe coded](https://img.shields.io/badge/vibe-coded-blueviolet)](https://en.wikipedia.org/wiki/Vibe_coding)
 
-## Возможности
+[Русская версия →](README.ru.md)
 
-- **Авторизация** — вход по cookie `X1_SSO`, QR-код через Госуслуги (ESIA), ESIA OAuth-поток
-- **Типизированный API** — каждый эндпоинт — датакласс-метод с аннотацией возврата; `await client(Method(...))` и `async for`
-- **Протоколы** — REST, Ext.Direct RPC (`POST /extjs/direct`), SSE, HTML-парсинг
-- **Реактивные наблюдатели** — `async for event in watcher.events()` для оценок, домашних заданий, расписания, уведомлений, приёмной
-- **`Dispatcher`** — объединяет несколько наблюдателей в один поток событий
-- **Звонки** — `LessonBell` считает расписание уроков локально, генерирует `Bell`, `LessonStarting`, `LessonEnded`
-- **Хранилище** — `MemoryStorage` / `FileStorage`; снимки персистируются между перезапусками
-- **Circuit breaker** и **rate limiter** встроены в транспорт
-- **py.typed** — полная поддержка mypy / pyright в strict-режиме
+</div>
+
+> **Note:** This library is mostly vibe-coded — built through AI-assisted development. The API surface, types, and logic are correct to the best of our knowledge, but treat it as experimental. Feel free to fork and adapt.
 
 ---
 
-## Требования
+## Overview
 
-Python **3.12+**. Зависимости: `httpx`, `pydantic`, `pydantic-settings`, `structlog`, `selectolax`, `anyio`.
+`pskovedu` is a fully typed, async-first Python client for the **one.pskovedu.ru** electronic journal — the education portal of Pskov Region, Russia. It covers:
+
+- **Authentication** — `X1_SSO` cookie injection, QR-code login via Gosuslugi (ESIA), full ESIA OAuth flow
+- **API** — REST, Ext.Direct RPC (`POST /extjs/direct`), SSE streams, HTML parsing
+- **Reactive layer** — push-style async iterators for marks, homework, schedule changes, notifications, and reception slots
+- **Lesson bell** — local scheduler that emits typed events from a `ScheduleDay` without any network calls
+- **Typed** — `py.typed` marker, full mypy / pyright strict-mode support
 
 ---
 
-## Установка
+## Requirements
+
+- Python **3.12+**
+- Dependencies (installed automatically): `httpx`, `pydantic`, `pydantic-settings`, `structlog`, `selectolax`, `anyio`
+
+---
+
+## Installation
+
+The package is not on PyPI — install directly from GitHub.
+
+### pip (one-liner)
 
 ```bash
 pip install "git+https://github.com/zlexdev/pskovedu-sdk.git"
 ```
 
-В `requirements.txt`:
+### requirements.txt
 
 ```
 pskovedu @ git+https://github.com/zlexdev/pskovedu-sdk.git
 ```
 
+### pyproject.toml (PEP 508)
+
+```toml
+[project]
+dependencies = [
+    "pskovedu @ git+https://github.com/zlexdev/pskovedu-sdk.git",
+]
+```
+
+### Pin to a specific commit
+
+```bash
+pip install "git+https://github.com/zlexdev/pskovedu-sdk.git@COMMIT_SHA"
+```
+
+### Development install (editable)
+
+```bash
+git clone https://github.com/zlexdev/pskovedu-sdk.git
+cd pskovedu-sdk
+pip install -e ".[dev]"
+
+# Run tests
+pytest
+```
+
 ---
 
-## Быстрый старт
+## Quick start
 
-### Авторизация по cookie
+### Cookie auth
+
+The fastest way to bootstrap a client if you already have an `X1_SSO` session cookie:
 
 ```python
 import asyncio
 from pskovedu import Client
 
 async def main():
-    async with Client.from_cookie(x1_sso="ВАШ_X1_SSO") as client:
+    async with Client.from_cookie(x1_sso="YOUR_X1_SSO") as client:
         session = await client.get_session()
-        print(session.display_name)
+        print(session.display_name)  # e.g. "Иванова Анна Петровна"
 
 asyncio.run(main())
 ```
 
-### QR-авторизация через Госуслуги
+### QR login via Gosuslugi
 
 ```python
-async def show_qr(url: str) -> None:
-    print("Отсканируйте QR в приложении Госуслуги:", url)
+import asyncio
+from pskovedu import Client
 
-async with Client() as client:
-    await client.login_qr(show_qr)
-    session = await client.get_session()
-    print(session.display_name)
+async def show_qr(url: str) -> None:
+    # Display or print the URL — user scans it in the Gosuslugi mobile app
+    print("Scan QR in Gosuslugi:", url)
+
+async def main():
+    async with Client() as client:
+        await client.login_qr(show_qr)       # blocks until confirmed
+        session = await client.get_session()
+        print("Logged in as:", session.display_name)
+
+asyncio.run(main())
 ```
 
-### Дневник и оценки
+---
+
+## Core concepts
+
+### Client
+
+`Client` is the single entry point. Every API call is a typed method-object:
+
+```python
+result = await client(SomeMethod(arg=value))
+```
+
+Paginated endpoints return an async iterator:
+
+```python
+async for entry in client(DiaryPages(participant_guid="...")):
+    print(entry.subject, entry.marks)
+```
+
+### Methods
+
+Each endpoint is a Pydantic dataclass that declares its HTTP method, URL, and return type:
+
+```python
+from pskovedu.methods.diary import GetDiary, GetMarksReport
+
+week      = await client(GetDiary(participant_guid="..."))
+marks     = await client(GetMarksReport(participant_guid="..."))
+```
+
+Protocol dispatch is automatic — REST, Ext.Direct RPC, SSE, and X1 all go through the same `client(...)` funnel.
+
+---
+
+## Examples
+
+### Diary
 
 ```python
 async with Client.from_cookie(x1_sso="...") as client:
     participants = await client.get_participants()
     guid = participants[0].guid
 
+    # Current week
     week = await client.get_diary(guid)
     for entry in week.entries:
-        print(entry.subject, entry.marks)
+        print(f"{entry.subject}: {entry.marks}")
 
+    # Marks report (выписка оценок)
     report = await client.get_marks_report(guid)
     for subj in report.subjects:
-        print(subj.name, subj.avg_mark)
+        print(f"{subj.name}  avg={subj.avg_mark}")
+
+    # Stream multiple weeks
+    async for entry in client(DiaryPages(participant_guid=guid, start=date(2025, 9, 1))):
+        print(entry)
 ```
 
-### Реактивные наблюдатели
+### Schedule
 
 ```python
-from pskovedu import Client
-from pskovedu.reactive import MarkWatcher, NotificationWatcher, Dispatcher
-from pskovedu.reactive.events import NewMark, NewNotification
+    schedule = await client.get_schedule(grade_guid="...")
+    for lesson in schedule.lessons:
+        print(lesson.time_start, lesson.subject, lesson.teacher)
+```
+
+### Notifications
+
+```python
+    notifications = await client.get_notifications()
+    for n in notifications:
+        print(n.title, n.created_at)
+```
+
+### Reception slots
+
+```python
+    slots = await client.get_reception(start="01.09.2025", end="30.09.2025")
+    for slot in slots:
+        print(slot.teacher, slot.time_start)
+```
+
+---
+
+## Reactive layer
+
+The reactive module converts repeated API polls into a typed `async for` stream with snapshot diffing — changes are detected automatically, duplicates suppressed.
+
+### Single watcher
+
+```python
+from pskovedu.reactive import MarkWatcher
+from pskovedu.reactive.events import NewMark, MarkChanged
+
+async with Client.from_cookie(x1_sso="...") as client:
+    watcher = MarkWatcher(client, participant_guid="...", interval=30.0)
+
+    async for event in watcher.events():
+        match event:
+            case NewMark(mark=m):
+                print("New mark:", m.value, "in", m.subject)
+            case MarkChanged(before=b, after=a):
+                print(f"Mark changed: {b.value} → {a.value}")
+```
+
+### Multiple watchers via Dispatcher
+
+```python
+from pskovedu.reactive import Dispatcher, MarkWatcher, NotificationWatcher, HomeworkWatcher
 
 async with Client.from_cookie(x1_sso="...") as client:
     dispatcher = Dispatcher(
         MarkWatcher(client, participant_guid="..."),
+        HomeworkWatcher(client, participant_guid="..."),
         NotificationWatcher(client),
     )
 
     async for event in dispatcher.events():
-        match event:
-            case NewMark(mark=m):
-                print("Новая оценка:", m)
-            case NewNotification(notification=n):
-                print("Уведомление:", n.title)
+        print(type(event).__name__, event)
 ```
 
-### Звонки уроков
+### Persistent snapshots
+
+Pass a `FileStorage` so watcher snapshots survive restarts:
+
+```python
+from pskovedu.storage import FileStorage
+from pskovedu.reactive import MarkWatcher
+
+storage = FileStorage(path="/var/lib/mybot/state.json")
+watcher = MarkWatcher(client, participant_guid="...", storage=storage)
+```
+
+### Available watchers
+
+| Class | Emits |
+|---|---|
+| `MarkWatcher` | `NewMark`, `MarkChanged` |
+| `HomeworkWatcher` | `NewHomework` |
+| `ScheduleWatcher` | `ScheduleChanged` |
+| `ReceptionWatcher` | `NewReception` |
+| `NotificationWatcher` | `NewNotification` |
+
+---
+
+## Lesson bell
+
+`LessonBell` runs entirely locally — no network calls. Give it a `ScheduleDay` and iterate:
 
 ```python
 from pskovedu.reactive import LessonBell
+from datetime import timedelta
 
-schedule_day = await client.get_schedule_day(...)
-bell = LessonBell(schedule_day)
+schedule_day = await client.get_schedule_day(grade_guid="...")
+bell = LessonBell(schedule_day, lead=timedelta(minutes=5))
 
 async for event in bell.events():
-    print(event)  # LessonStarting | Bell | LessonEnded
+    match event:
+        case LessonStarting(lesson=l, lead=td):
+            print(f"Lesson starting in {td}: {l.subject}")
+        case Bell(lesson=l, phase="begin"):
+            print(f"▶ {l.subject} started")
+        case Bell(lesson=l, phase="end"):
+            print(f"■ {l.subject} ended")
 ```
 
 ---
 
-## Структура пакета
-
-```
-pskovedu/
-├── client.py          # Client — единственная точка входа
-├── methods/           # Типизированные классы-методы (один файл на домен)
-├── models/            # Pydantic-модели ответов
-├── reactive/          # Наблюдатели, события, Dispatcher, LessonBell
-├── auth/              # AuthManager, QR/ESIA/cookie-солверы
-├── protocol/          # REST, ExtDirect, SSE, X1
-├── transport/         # Retry, SSE-стриминг
-├── storage/           # MemoryStorage, FileStorage
-├── parsers/           # HTML-парсеры (shell, participant, schedule, bundles)
-└── config.py          # ClientConfig (pydantic-settings)
-```
-
----
-
-## Конфигурация
+## Configuration
 
 ```python
 from pskovedu.config import ClientConfig
@@ -145,18 +295,57 @@ from pskovedu.config import ClientConfig
 config = ClientConfig(
     request_timeout_s=30.0,
     poll_interval_s=60.0,
+    backoff_max_s=300.0,
 )
+
+async with Client(config=config) as client:
+    ...
 ```
 
-Все параметры доступны через переменные окружения с префиксом `PSKOVEDU_`:
+All settings accept environment variables with the `PSKOVEDU_` prefix:
 
 ```env
 PSKOVEDU_REQUEST_TIMEOUT_S=30
 PSKOVEDU_POLL_INTERVAL_S=60
+PSKOVEDU_BACKOFF_MAX_S=300
 ```
 
 ---
 
-## Лицензия
+## Package layout
 
-MIT — см. [LICENSE](LICENSE).
+```
+pskovedu/
+├── client.py          # Client — single entry point
+├── config.py          # ClientConfig (pydantic-settings)
+├── constants.py       # Hosts, paths, Ext.Direct action/method enums
+├── exceptions.py      # Typed exception hierarchy
+│
+├── methods/           # One file per domain: diary, schedule, reports, …
+├── models/            # Pydantic response models
+│
+├── reactive/
+│   ├── events.py      # ReactiveEvent hierarchy (NewMark, Bell, …)
+│   ├── diff.py        # StateDiffer[T] — snapshot-diff engine
+│   ├── _base.py       # Watcher[T] ABC — poll → diff → emit loop
+│   ├── watchers.py    # MarkWatcher, HomeworkWatcher, …
+│   ├── dispatcher.py  # Dispatcher — merges N watchers into one stream
+│   └── bell.py        # LessonBell — local lesson-bell scheduler
+│
+├── auth/              # AuthManager, QR/ESIA solvers, session tokens
+├── protocol/          # REST, Ext.Direct, SSE, X1 wire protocols
+├── transport/         # Retry + backoff, SSE streaming
+├── storage/           # MemoryStorage, FileStorage (BaseStorage ABC)
+├── parsers/           # HTML parsers: shell, participant, schedule, bundles
+├── sessions/          # HttpxSession (BaseSession ABC)
+├── pagination/        # PageIterator
+├── breaker/           # CircuitBreaker
+├── rate_limit/        # TokenBucket rate limiter
+└── utils/             # JWT decode, URL encoding helpers
+```
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
