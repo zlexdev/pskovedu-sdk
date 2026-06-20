@@ -17,6 +17,8 @@ Pskov Region Education Portal · one.pskovedu.ru
 
 > **Note:** This library is mostly vibe-coded — built through AI-assisted development. The API surface, types, and logic are correct to the best of our knowledge, but treat it as experimental. Feel free to fork and adapt.
 
+> 📖 **Full usage guide in [`docs/`](docs/README.md)** — [getting started](docs/getting-started.md) · [authentication](docs/authentication.md) · [usage](docs/usage.md) · [reactive layer](docs/reactive.md) · [configuration](docs/configuration.md) · [architecture](docs/architecture.md) · [gotchas](docs/gotchas.md) · [known issues & status](docs/known-issues.md).
+
 ---
 
 ## Overview
