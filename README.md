@@ -94,11 +94,16 @@ from pskovedu import Client
 
 async def main():
     async with Client.from_cookie(x1_sso="YOUR_X1_SSO") as client:
-        session = await client.get_session()
-        print(session.display_name)  # e.g. "Иванова Анна Петровна"
+        shell = await client.get_shell()
+        # Identity comes from the shell (X1_CONFIG.meta.au), not a /session endpoint
+        print(shell.role_meta.name if shell.role_meta else "authenticated")
 
 asyncio.run(main())
 ```
+
+> The portal has **no `/session` profile endpoint**. The logged-in user's identity
+> is injected into the app shell as the `X1_CONFIG.meta.au` global, exposed here as
+> `ShellConfig.role_meta` via `get_shell()`.
 
 ### QR login via Gosuslugi
 
@@ -112,9 +117,8 @@ async def show_qr(url: str) -> None:
 
 async def main():
     async with Client() as client:
-        await client.login_with_qr(display_cb=show_qr)   # blocks until confirmed
-        session = await client.get_session()
-        print("Logged in as:", session.display_name)
+        shell = await client.login_with_qr(display_cb=show_qr)   # blocks until confirmed
+        print("Logged in as:", shell.role_meta.name if shell.role_meta else "?")
 
 asyncio.run(main())
 ```

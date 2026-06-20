@@ -29,7 +29,6 @@ DEFAULT_HOSTS: dict[Host, str] = {
 }
 
 
-PATH_SESSION = "/session"
 PATH_EXT_DIRECT = "/extjs/direct"
 PATH_X1_CALL = "/x1db/service/call"
 PATH_SCHEDULE = "/schedule/index/schedule/grade/{grade_guid}/{date}"

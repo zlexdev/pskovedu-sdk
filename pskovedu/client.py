@@ -7,8 +7,8 @@ that return an auto-fetching :class:`~pskovedu.pagination.iterator.PageIterator`
 
 from __future__ import annotations
 
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from .config import ClientConfig
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from .models.common import EduPage
     from .models.diary import DiaryEntry, DiaryWeek, MarksReport
     from .models.eje import EjeResult
-    from .models.enums import JournalState, ReceptionAudience, ReportForm, ReportFmt
+    from .models.enums import JournalState, ReceptionAudience, ReportFmt, ReportForm
     from .models.journal import Journal
     from .models.monitoring import MonitoringResult
     from .models.notifications import UserNotification
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
         Year,
     )
     from .models.schedule import ScheduleDay
-    from .models.session import Session, ShellConfig
+    from .models.session import ShellConfig
     from .models.types import JournalCellValue, X1Filter
     from .models.util import AuthCheck, OAuthConfig
     from .models.x1 import X1PageModel, X1RecordModel
@@ -108,11 +108,11 @@ class Client:
     ```python
     # Minimal — pre-set X1_SSO cookie (works immediately, no login needed)
     client = Client.from_cookie(x1_sso="<cookie-value>")
-    session = await client.get_session()
+    shell = await client.get_shell()
 
     # Full async context manager (bootstrap + auth on enter, save + close on exit)
     async with Client.from_cookie(x1_sso="...") as client:
-        session = await client.get_session()
+        shell = await client.get_shell()
     ```
 
     Args:
@@ -214,13 +214,14 @@ class Client:
         method.as_(self)
         return _MethodCall(self, method)
 
-    async def login_with_qr(self, *, display_cb: DisplayCallback | None = None) -> Session:
-        """Authenticate via the QR SSE flow and return the resulting session.
+    async def login_with_qr(self, *, display_cb: DisplayCallback | None = None) -> ShellConfig:
+        """Authenticate via the QR SSE flow and return the bootstrapped shell.
 
         Lazily constructs an :class:`~pskovedu.auth.manager.AuthManager` if
         one is not already attached to this client, drives the full QR flow
         (generate → display → subscribe → confirm → cookie injection), then
-        returns the current portal session via :meth:`get_session`.
+        bootstraps the app shell via :meth:`get_shell` — whose ``role_meta``
+        carries the authenticated user's identity (``X1_CONFIG.meta.au``).
 
         Args:
             display_cb: optional callable invoked with the QR URL string so
@@ -228,7 +229,7 @@ class Client:
                 as an image).  May be sync or async.
 
         Returns:
-            The :class:`~pskovedu.models.session.Session` obtained after
+            The :class:`~pskovedu.models.session.ShellConfig` parsed after
             successful authentication.
         """
         if self._auth_manager is None:
@@ -237,12 +238,7 @@ class Client:
             self._auth_manager = AuthManager()
 
         await self._auth_manager.login_with_qr(self, display_cb=display_cb)
-        return await self.get_session()
-
-    async def get_session(self) -> Session:
-        from .methods.session import GetSession
-
-        return await self(GetSession())
+        return await self.get_shell()
 
     async def get_shell(self) -> ShellConfig:
         """Fetch the app-shell HTML and parse it into a typed ``ShellConfig``.

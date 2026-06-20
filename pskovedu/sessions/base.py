@@ -47,7 +47,7 @@ class BaseSession(ABC):
     HTTP call and returns a ``RawResponse``.
 
     The funnel is the single path for every SDK call:
-    ``Client.get_session()`` → ``client(GetSession())`` → ``session.make_request(...)``
+    ``Client.get_shell()`` → ``client(GetShell())`` → ``session.make_request(...)``
     → ``RestProtocol.build_request(...)`` → ``_send(...)``
     → ``RestProtocol.decode_response(...)`` → typed result.
     """

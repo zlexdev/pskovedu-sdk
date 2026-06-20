@@ -8,8 +8,8 @@ Every API endpoint is a `BaseMethod[T]` subclass.  The instance is the request
 bundle; awaiting it executes through the bound client.
 
 ```python
-session = await client(GetSession())        # universal __call__
-session = await client.get_session()       # flat Client sugar
+shell = await client(GetShell())        # universal __call__
+shell = await client.get_shell()       # flat Client sugar
 ```
 
 ## Base classes
@@ -25,7 +25,8 @@ session = await client.get_session()       # flat Client sugar
 
 ## Domain files (spine — T1–T9 scope)
 
-- `session.py` — `GetSession` → `Session`; `GetShell` → `_ShellHtml` (HtmlParsed)
+- `session.py` — `GetShell` → `_ShellHtml` (HtmlParsed); identity lives in the
+  parsed `ShellConfig.role_meta` (`X1_CONFIG.meta.au`), not a `/session` endpoint
 
 ## Domain files (downstream agents)
 

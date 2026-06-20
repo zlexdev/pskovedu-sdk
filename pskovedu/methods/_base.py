@@ -4,8 +4,8 @@ Every SDK endpoint is a Pydantic v2 model class.  The instance IS the request
 bundle.  Awaiting it executes through the bound client.
 
 Three execution surfaces, one funnel:
-1. ``await client.get_session()``         — flat Client sugar
-2. ``await client(GetSession())``         — universal __call__
+1. ``await client.get_shell()``           — flat Client sugar
+2. ``await client(GetShell())``           — universal __call__
 3. ``await session.next_week()``          — bound method on an EduObject
 """
 

@@ -1,43 +1,25 @@
-"""Session bootstrap methods: GetSession and GetShell.
+"""Shell bootstrap method: GetShell.
 
-GetSession decodes the portal JWT into a typed ``Session`` DTO.
-GetShell fetches ``GET /`` and passes the HTML to ``parsers/shell.py``
-for REMOTING_API + X1_CONFIG extraction.
+GetShell fetches ``GET /`` and passes the HTML to ``parsers/shell.py`` for
+``REMOTING_API`` + ``X1_CONFIG`` extraction.  The authenticated user's identity
+lives in ``X1_CONFIG.meta.au`` (the ``X1.user`` global the portal injects into
+the shell) — there is **no** portal ``/session`` profile endpoint.
 """
 
 from __future__ import annotations
 
 from typing import ClassVar
 
-from ..constants import PATH_SESSION, PATH_SHELL, Host
+from ..constants import PATH_SHELL, Host
 from ..models._base import HtmlParsed
-from ..models.session import Session
 from ._bases import RestMethod
-
-
-class GetSession(RestMethod[Session]):
-    """Fetch the current session JWT and decode it into a ``Session`` DTO.
-
-    Sends ``GET /session`` with the ``X1_SSO`` cookie (injected by the auth
-    layer).  The raw HS256 JWT response body is decoded by
-    ``RestProtocol.decode_response`` into :class:`~pskovedu.models.session.Session`.
-
-    Raises:
-        AuthExpiredError: when the server returns 401 (handled by the funnel).
-        ProtocolError: when the response is not a valid JWT or cannot be parsed.
-    """
-
-    __http_method__: ClassVar[str] = "GET"
-    __url__: ClassVar[str] = PATH_SESSION
-    __host__: ClassVar[str] = Host.PORTAL
-    __returning__: ClassVar[type] = Session
 
 
 class _ShellHtml(HtmlParsed):
     """Internal marker model: the app-shell HTML response.
 
     ``RestProtocol`` detects ``HtmlParsed`` and returns the raw HTML text.
-    ``GetShell.decode`` (called by client.bootstrap()) then hands it to
+    ``GetShell`` (called by ``client.get_shell()``) then hands it to
     ``parsers/shell.py``.
     """
 
@@ -50,8 +32,9 @@ class GetShell(RestMethod[_ShellHtml]):
     ``RestProtocol`` detects the ``HtmlParsed`` return type and passes the
     raw HTML text back instead of attempting JSON parsing.
 
-    The caller (``client.bootstrap()``) passes the ``.raw_html`` field to
-    ``parsers/shell.py`` to extract ``ShellConfig``.
+    The caller (``client.get_shell()``) passes the ``.raw_html`` field to
+    ``parsers/shell.py`` to extract ``ShellConfig`` — including the current
+    user's role identity from ``X1_CONFIG.meta.au``.
 
     Raises:
         ProtocolError: on HTTP-level errors.

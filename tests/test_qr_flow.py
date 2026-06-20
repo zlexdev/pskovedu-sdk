@@ -41,9 +41,9 @@ def _patch_auth_network(monkeypatch: Any, x1_sso_token: str = "fake-x1-sso-token
 
     1. AuthManager._obtain_jwt makes a real httpx call to GET /session for a JWT.
        We stub it to a no-op (COOKIE_ONLY state is enough for our tests).
-    2. Client.get_session (called at the end of login_with_qr) makes a
+    2. Client.get_shell (called at the end of login_with_qr) makes a
        make_request call that goes through the AuthManager ensure path again.
-       We stub it to return a minimal Session-like object so the call succeeds.
+       We stub it to return a minimal ShellConfig-like object so the call succeeds.
     """
     from pskovedu.auth import manager as auth_manager_mod
 
@@ -54,14 +54,14 @@ def _patch_auth_network(monkeypatch: Any, x1_sso_token: str = "fake-x1-sso-token
 
     import types
 
-    fake_session_obj = types.SimpleNamespace(id="fake-session-id")
+    fake_shell_obj = types.SimpleNamespace(role_meta=None)
 
-    async def _fake_get_session(self: Any) -> Any:
-        return fake_session_obj
+    async def _fake_get_shell(self: Any) -> Any:
+        return fake_shell_obj
 
     import pskovedu.client as client_mod
 
-    monkeypatch.setattr(client_mod.Client, "get_session", _fake_get_session)
+    monkeypatch.setattr(client_mod.Client, "get_shell", _fake_get_shell)
 
 
 def test_qr_module_importable() -> None:

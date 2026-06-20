@@ -89,11 +89,16 @@ from pskovedu import Client
 
 async def main():
     async with Client.from_cookie(x1_sso="ВАШ_X1_SSO") as client:
-        session = await client.get_session()
-        print(session.display_name)
+        shell = await client.get_shell()
+        # Идентичность берётся из shell (X1_CONFIG.meta.au), а не из /session
+        print(shell.role_meta.name if shell.role_meta else "authenticated")
 
 asyncio.run(main())
 ```
+
+> У портала **нет эндпоинта `/session` с профилем**. Личность залогиненного
+> пользователя приходит в shell как глобал `X1_CONFIG.meta.au` — он доступен как
+> `ShellConfig.role_meta` через `get_shell()`.
 
 ### QR-авторизация через Госуслуги
 
@@ -102,9 +107,8 @@ async def show_qr(url: str) -> None:
     print("Отсканируйте QR в приложении Госуслуги:", url)
 
 async with Client() as client:
-    await client.login_with_qr(display_cb=show_qr)
-    session = await client.get_session()
-    print("Вошли как:", session.display_name)
+    shell = await client.login_with_qr(display_cb=show_qr)
+    print("Вошли как:", shell.role_meta.name if shell.role_meta else "?")
 ```
 
 ---

@@ -1,6 +1,10 @@
-"""Session-related models: JWT Session, RoleMeta, ShellConfig.
+"""Session-token + shell-config models.
 
-Source: auth.md §Step 8 — JWT payload fields; html_pages.md §X1_CONFIG.
+``Session`` decodes the QR/ESIA session-token JWT (``POST sfd.gosuslugi.ru/session``
+→ ``{"token": "<JWT>"}``); its payload carries ``sessionId``/``exp``/``iat``/``jti``
+and no profile data.  The authenticated user's *identity* is the
+``X1_CONFIG.meta.au`` block (``RoleMeta``) injected into the shell HTML — the
+portal has no ``/session`` profile endpoint.
 """
 
 from __future__ import annotations
@@ -15,13 +19,12 @@ from ._base import EduObject
 
 
 class Session(EduObject):
-    """Decoded portal JWT session.
+    """Decoded session-token JWT (QR/ESIA flow).
 
-    Obtained via ``GET /session``; the response body is a raw HS256 JWT which
-    the SDK decodes (no signature verify) into this DTO.
-
-    Fields map directly to the JWT payload observed in auth.md §Step 8:
-    ``sessionId``, ``exp``, ``iat``, ``jti``.
+    The ``POST sfd.gosuslugi.ru/session`` response body is ``{"token": "<JWT>"}``;
+    :class:`~pskovedu.auth.session_token.SessionToken` decodes that HS256 JWT
+    (no signature verify) into this DTO.  It is a *session token*, not a user
+    profile — the payload is only ``sessionId``/``exp``/``iat``/``jti``.
 
     Args:
         session_id: 64-hex session identifier (``payload.sessionId``).

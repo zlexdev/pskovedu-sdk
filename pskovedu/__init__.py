@@ -8,8 +8,8 @@ Quick start::
     from pskovedu import Client, ClientConfig, EduError
 
     client = Client.from_cookie(x1_sso="<your-X1_SSO-cookie>")
-    session = await client.get_session()
-    print(session.session_id, session.expired)
+    shell = await client.get_shell()
+    print(shell.role_meta.name if shell.role_meta else "authenticated")
 """
 
 from .cache.reference import ReferenceCache

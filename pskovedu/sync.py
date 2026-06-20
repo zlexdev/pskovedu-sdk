@@ -22,7 +22,7 @@ class SyncClient:
     Example::
 
         with SyncClient.from_cookie(x1_sso="<value>") as c:
-            session = c.get_session()
+            shell = c.get_shell()
             grades = c(GetGrades())
     """
 
@@ -40,15 +40,6 @@ class SyncClient:
     ) -> SyncClient:
         return cls(Client.from_cookie(x1_sso=x1_sso, session_file=session_file, config=config))
 
-    @classmethod
-    def from_har(
-        cls,
-        path: str | Path,
-        *,
-        config: ClientConfig | None = None,
-    ) -> SyncClient:
-        return cls(Client.from_har(path, config=config))
-
     def __enter__(self) -> SyncClient:
         self._loop.run_until_complete(self._client.__aenter__())
         return self
@@ -60,5 +51,5 @@ class SyncClient:
     def __call__(self, method: BaseMethod[Any]) -> Any:
         return self._loop.run_until_complete(self._client(method))
 
-    def get_session(self) -> Any:
-        return self._loop.run_until_complete(self._client.get_session())
+    def get_shell(self) -> Any:
+        return self._loop.run_until_complete(self._client.get_shell())
