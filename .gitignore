@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# Tests
+.pytest_cache/
+htmlcov/
+.coverage
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+
+# Project-local dev files
+har_sessions/
+*.har
+main.py
+.plans/
+.claude/
+pskovedu-sdk/
