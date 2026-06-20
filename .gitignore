@@ -36,3 +36,4 @@ main.py
 .plans/
 .claude/
 pskovedu-sdk/
+_live*.py
